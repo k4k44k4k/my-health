@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced AI Health Concierge</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto+Sans+JP', sans-serif; background-color: #f8fafc; }
+        .tab-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; font-weight: 700; }
+        input[type="range"] { accent-color: #3b82f6; }
+        .calendar-day { min-height: 80px; }
+        .today { background-color: #eff6ff; border: 2px solid #3b82f6; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .risk-pill { padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: bold; }
+        .risk-high { background-color: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; }
+        .risk-mid { background-color: #ffedd5; color: #f59e0b; border: 1px solid #fdba74; }
+        .risk-low { background-color: #ecfdf5; color: #10b981; border: 1px solid #6ee7b7; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800">
+
+    <!-- App Container -->
+    <div id="app" class="max-w-5xl mx-auto p-4 pb-24 lg:p-8">
+        
+        <!-- Header Section -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">Health Pro <span class="text-blue-600">AI</span></h1>
+                <div class="flex items-center gap-3 mt-2 bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-100">
+                    <i data-lucide="calendar" class="w-4 h-4 text-blue-500"></i>
+                    <input type="date" id="active-date-picker" onchange="handleDateChange(this.value)" class="text-sm border-none bg-transparent font-bold text-slate-700 outline-none cursor-pointer">
+                </div>
+            </div>
+            
+            <div id="profile-summary" class="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-md border border-slate-100 min-w-[280px]">
+                <div class="relative">
+                    <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white shadow-lg">
+                        <i data-lucide="user"></i>
+                    </div>
+                    <div id="health-indicator" class="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full"></div>
+                </div>
+                <div>
+                    <p id="header-user-name" class="text-base font-bold text-slate-900 leading-none">ゲストユーザー</p>
+                    <div class="flex items-center gap-2 mt-1.5">
+                        <span id="header-bmi" class="text-[10px] font-bold px-2 py-0.5 bg-slate-100 rounded text-slate-500 tracking-wider">BMI: --</span>
+                        <span id="header-scan-status" class="text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-600 tracking-wider uppercase">未解析</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Navigation -->
+        <nav class="flex overflow-x-auto space-x-8 border-b border-slate-200 mb-8 no-scrollbar sticky top-0 bg-slate-50/80 backdrop-blur-md z-40 py-2">
+            <button onclick="switchTab('input')" id="tab-input" class="pb-3 px-1 text-sm font-semibold whitespace-nowrap transition-all tab-active">日常ログ</button>
+            <button onclick="switchTab('analysis')" id="tab-analysis" class="pb-3 px-1 text-sm font-semibold whitespace-nowrap transition-all text-slate-400">AI深層解析</button>
+            <button onclick="switchTab('history')" id="tab-history" class="pb-3 px-1 text-sm font-semibold whitespace-nowrap transition-all text-slate-400">データ履歴</button>
+            <button onclick="switchTab('recipes')" id="tab-recipes" class="pb-3 px-1 text-sm font-semibold whitespace-nowrap transition-all text-slate-400">健康レシピ</button>
+            <button onclick="switchTab('settings')" id="tab-settings" class="pb-3 px-1 text-sm font-semibold whitespace-nowrap transition-all text-slate-400">診断書スキャン</button>
+        </nav>
+
+        <!-- View: Daily Input -->
+        <section id="view-input" class="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Water -->
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500">
+                                <i data-lucide="droplets"></i>
+                            </div>
+                            <h3 class="font-bold text-slate-800">水分補給</h3>
+                        </div>
+                        <span id="water-val" class="text-2xl font-black text-blue-600">0 <span class="text-xs text-slate-400">ml</span></span>
+                    </div>
+                    <input type="range" id="input-water" min="0" max="3000" step="100" value="0" oninput="updateWaterLabel(this.value)" class="w-full h-2.5 bg-slate-100 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex justify-between mt-3 text-[10px] font-bold text-slate-400">
+                        <span>0ml</span>
+                        <span>1500ml</span>
+                        <span>3000ml</span>
+                    </div>
+                </div>
+
+                <!-- Vital Stats -->
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 grid grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">体重 (kg)</label>
+                        <input type="number" id="input-weight" step="0.1" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xl font-black focus:ring-2 focus:ring-blue-100 outline-none transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">血圧 (Sys/Dia)</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="input-bp-high" placeholder="120" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xl font-black focus:ring-2 focus:ring-blue-100 outline-none transition-all">
+                            <span class="text-slate-300 font-bold">/</span>
+                            <input type="number" id="input-bp-low" placeholder="80" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-xl font-black focus:ring-2 focus:ring-blue-100 outline-none transition-all">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Meals Section -->
+            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-3">
+                        <i data-lucide="utensils" class="text-orange-500"></i>
+                        今日の食事内容
+                    </h3>
+                    <button onclick="openRecipePicker()" class="px-4 py-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold text-blue-600 transition-colors flex items-center gap-2">
+                        <i data-lucide="plus-circle" class="w-4 h-4"></i> レシピから追加
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-4">
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">朝食</span>
+                            <input type="text" id="meal-morning" placeholder="卵, 納豆, ご飯..." class="w-full mt-1.5 p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:bg-white transition-all outline-none">
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">昼食</span>
+                            <input type="text" id="meal-lunch" placeholder="サラダ, パスタ..." class="w-full mt-1.5 p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:bg-white transition-all outline-none">
+                        </div>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">夕食</span>
+                            <input type="text" id="meal-dinner" placeholder="焼き魚, 味噌汁..." class="w-full mt-1.5 p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:bg-white transition-all outline-none">
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">間食・飲酒</span>
+                            <input type="text" id="meal-snack" placeholder="チョコレート, ビール..." class="w-full mt-1.5 p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm focus:bg-white transition-all outline-none">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lifestyle Section -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Rhythm -->
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-3 mb-6">
+                        <i data-lucide="clock" class="text-purple-500"></i> 睡眠・生活リズム
+                    </h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">起床時間</label>
+                            <input type="time" id="input-wake" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">就寝時間</label>
+                            <input type="time" id="input-sleep" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none">
+                        </div>
+                    </div>
+                </div>
+                <!-- Activities -->
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-3 mb-6">
+                        <i data-lucide="activity" class="text-green-500"></i> 活動・メモ
+                    </h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-widest">運動・歩数</label>
+                            <input type="text" id="input-exercise" placeholder="ウォーキング 30分など" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-widest">体調・備考</label>
+                            <input type="text" id="input-stool" placeholder="体調の変化や排便など" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="saveDailyData()" class="w-full bg-slate-900 text-white py-5 rounded-3xl font-bold shadow-xl hover:bg-blue-600 transition-all active:scale-[0.98] flex items-center justify-center gap-3">
+                <i data-lucide="save" class="w-5 h-5"></i> ログを安全に保存
+            </button>
+        </section>
+
+        <!-- View: Deep Analysis -->
+        <section id="view-analysis" class="hidden space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <!-- Top Dashboard Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-bold text-lg text-slate-800">栄養バランス分析</h3>
+                        <div id="analysis-date-label" class="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold">LATEST RECORD</div>
+                    </div>
+                    <div class="max-w-[320px] mx-auto py-4">
+                        <canvas id="nutrientChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                    <h3 class="font-bold text-sm mb-6 text-slate-400 tracking-widest uppercase">健康リスク判定</h3>
+                    <div id="health-risk-list" class="space-y-6">
+                        <!-- Risk items will be injected -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Findings Box -->
+            <div id="findings-section" class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 hidden">
+                <h3 class="font-bold text-slate-800 mb-6 flex items-center gap-3">
+                    <i data-lucide="clipboard-list" class="text-indigo-500"></i>
+                    検出された健康診断の所見
+                </h3>
+                <div id="findings-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Dynamic Findings -->
+                </div>
+            </div>
+            
+            <!-- AI Comprehensive Report -->
+            <div class="bg-gradient-to-br from-slate-900 to-indigo-950 p-8 rounded-[40px] text-white shadow-2xl relative overflow-hidden">
+                <div class="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center">
+                        <i data-lucide="brain" class="text-blue-400"></i>
+                    </div>
+                    <h3 class="text-xl font-bold">AI総合ヘルスレポート</h3>
+                </div>
+                <div id="ai-report-content" class="space-y-6 text-slate-300 text-sm leading-relaxed">
+                    <!-- AI Report Content -->
+                </div>
+            </div>
+
+            <!-- Food Suggestions -->
+            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <h3 class="font-bold mb-6 text-xs text-slate-400 uppercase tracking-widest">解析結果に基づく推奨食材</h3>
+                <div id="suggested-foods" class="flex flex-wrap gap-3"></div>
+            </div>
+        </section>
+
+        <!-- View: History Search -->
+        <section id="view-history" class="hidden space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center mb-8">
+                    <h3 id="calendar-title" class="text-xl font-black text-slate-800">2024.05</h3>
+                    <div class="flex gap-2">
+                        <button onclick="prevMonth()" class="p-2 hover:bg-slate-100 rounded-xl transition-colors"><i data-lucide="chevron-left"></i></button>
+                        <button onclick="nextMonth()" class="p-2 hover:bg-slate-100 rounded-xl transition-colors"><i data-lucide="chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-7 gap-2 text-center text-[10px] font-black text-slate-300 mb-4 uppercase tracking-tighter">
+                    <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+                </div>
+                <div id="calendar-grid" class="grid grid-cols-7 gap-2"></div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                <div class="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl mb-6">
+                    <i data-lucide="search" class="text-slate-400 w-5 h-5 ml-2"></i>
+                    <input type="text" id="history-search" oninput="searchHistory(this.value)" placeholder="過去の食事内容やメモを検索..." class="w-full text-sm bg-transparent outline-none p-2 font-medium">
+                </div>
+                <div id="search-results" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+            </div>
+        </section>
+
+        <!-- View: Scanner (Settings) -->
+        <section id="view-settings" class="hidden space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div class="bg-white p-10 rounded-[40px] shadow-sm border border-slate-100">
+                <div class="flex items-center gap-4 mb-6">
+                    <div class="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                        <i data-lucide="scan"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-extrabold text-xl">健康診断書インテリジェント・スキャン</h3>
+                        <p class="text-sm text-slate-500 mt-1">AIが数値だけでなく、判定区分や医師のコメントも読み込みます。</p>
+                    </div>
+                </div>
+                
+                <textarea id="checkup-text-input" placeholder="診断結果のテキストをここにペーストしてください。
+例:
+判定: 肝機能(C), 血圧(B)
+所見: 軽度の脂肪肝の疑いがあります。血圧が境界域です。
+LDLコレステロール 158 mg/dL, AST 45, ALT 52..." 
+                class="w-full p-6 bg-slate-50 border border-slate-100 rounded-3xl text-sm h-64 mb-6 outline-none focus:ring-4 focus:ring-blue-100 focus:bg-white transition-all leading-relaxed"></textarea>
+                
+                <button onclick="analyzeCheckupText()" class="w-full bg-blue-600 text-white py-5 rounded-3xl font-extrabold shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-3">
+                    <i data-lucide="zap"></i> AI深層スキャンを実行
+                </button>
+                
+                <div id="checkup-summary-details" class="mt-10 hidden border-t border-slate-100 pt-8">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase mb-6 tracking-widest">解析されたメディカル・プロファイル</h4>
+                    <div id="param-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <!-- Parameter cards -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <h3 class="font-bold mb-6 border-b pb-4 text-slate-800">基本プロファイル</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">お名前</label>
+                        <input type="text" id="setting-name" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-widest">身長 (cm)</label>
+                        <input type="number" id="setting-height" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold">
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="saveSettings()" class="w-full bg-slate-900 text-white py-5 rounded-3xl font-bold shadow-xl">基本設定を更新</button>
+        </section>
+
+        <!-- View: Recipes (Minimal implementation) -->
+        <section id="view-recipes" class="hidden space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+                <h3 class="font-bold mb-6 text-slate-800">マイレシピ登録</h3>
+                <div class="space-y-4">
+                    <input type="text" id="recipe-name" placeholder="例: ヘルシー海鮮丼" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm">
+                    <textarea id="recipe-items" placeholder="具材をカンマ区切りで入力（例: まぐろ, サーモン, 玄米）" class="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm h-24"></textarea>
+                    <button onclick="saveRecipe()" class="w-full bg-blue-600 text-white py-3 rounded-2xl font-bold">マイレシピに追加</button>
+                </div>
+            </div>
+            <div id="recipe-list" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+        </section>
+
+    </div>
+
+    <!-- Modals -->
+    <div id="recipe-picker-modal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-50 backdrop-blur-md transition-all">
+        <div class="bg-white rounded-[40px] p-10 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200">
+            <div class="flex justify-between items-center mb-8">
+                <h3 class="font-extrabold text-2xl text-slate-900 tracking-tight">レシピの呼び出し</h3>
+                <button onclick="closeRecipePicker()" class="p-2 hover:bg-slate-100 rounded-full transition-colors"><i data-lucide="x"></i></button>
+            </div>
+            <div id="picker-list" class="space-y-4 max-h-[50vh] overflow-y-auto pr-3 no-scrollbar"></div>
+        </div>
+    </div>
+
+    <!-- Alert Toast -->
+    <div id="msg-box" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-10 py-4 rounded-full shadow-2xl text-sm font-bold hidden z-50 animate-in slide-in-from-bottom-10"></div>
+
+    <script>
+        // --- Medical Constants & Intelligence Base ---
+        const MED_REF = {
+            standards: {
+                bmi: { normal: [18.5, 25], source: "日本肥満学会" },
+                bpHigh: { normal: 135, danger: 140, source: "日本高血圧学会" },
+                bpLow: { normal: 85, danger: 90, source: "日本高血圧学会" },
+                glucose: { normal: 100, danger: 126, source: "日本糖尿病学会" },
+                hba1c: { normal: 5.6, danger: 6.5, source: "日本糖尿病学会" },
+                ldl: { normal: 120, danger: 140, source: "日本動脈硬化学会" },
+                ast: { normal: 30, danger: 40, source: "日本人間ドック学会" },
+                alt: { normal: 30, danger: 40, source: "日本人間ドック学会" },
+                gtp: { normal: 50, danger: 50, source: "日本人間ドック学会" }
+            },
+            keywords: [
+                { id: 'fatty_liver', words: ['脂肪肝', '肝脂肪'], severity: 'mid', advice: '脂質と糖質の摂取を控え、アルコールを減らす必要があります。', basis: '肝臓への脂肪蓄積が指摘されています。代謝異常の予兆です。' },
+                { id: 'hypertension', words: ['高血圧', '血圧高め', '血圧(B)', '血圧(C)'], severity: 'high', advice: '減塩(1日6g未満)と適度な有酸素運動が急務です。', basis: '血管への持続的な負荷が指摘されています。動脈硬化のリスクがあります。' },
+                { id: 'dyslipidemia', words: ['脂質異常', 'コレステロール高め', '高脂血症'], severity: 'mid', advice: '青魚(EPA/DHA)を増やし、飽和脂肪酸(肉の脂)を減らしましょう。', basis: '血液中の脂質バランスが崩れています。心疾患リスクを高めます。' },
+                { id: 'gastritis', words: ['逆流性食道炎', '胃炎', '胃部不快'], severity: 'low', advice: '就寝3時間前の食事を避け、腹八分目を心がけてください。', basis: '消化器粘膜への負荷が懸念されます。' },
+                { id: 'diabetes', words: ['血糖高め', '糖尿病', '耐糖能異常'], severity: 'high', advice: 'ベジタブルファーストを徹底し、精製糖（白いパンや砂糖）を避けましょう。', basis: 'インスリン抵抗性の低下が疑われます。' },
+                { id: 're-exam', words: ['再検査', '精密検査', '要治療'], severity: 'high', advice: '速やかに医療機関を受診し、詳細な検査を受けることを強く推奨します。', basis: '診断項目において臨床的に重要な異常が認められています。' }
+            ]
+        };
+
+        const FOOD_KNOWLEDGE = {
+            "卵": { p: 8, c: 1, f: 6, v: 5, fi: 0, s: 0.1 },
+            "ご飯": { p: 2, c: 9, f: 0, v: 1, fi: 2, s: 0 },
+            "玄米": { p: 3, c: 8, f: 1, v: 4, fi: 5, s: 0 },
+            "鶏": { p: 10, c: 0, f: 3, v: 2, fi: 0, s: 0.2 },
+            "サバ": { p: 9, c: 0, f: 8, v: 4, fi: 0, s: 0.5 },
+            "野菜": { p: 1, c: 2, f: 0, v: 10, fi: 9, s: 0 },
+            "納豆": { p: 7, c: 3, f: 4, v: 6, fi: 6, s: 0.4 },
+            "味噌汁": { p: 2, c: 3, f: 1, v: 3, fi: 2, s: 1.8 },
+            "ラーメン": { p: 4, c: 10, f: 8, v: 1, fi: 1, s: 6.5 },
+            "ビール": { p: 0, c: 4, f: 0, v: 0, fi: 0, s: 0 }
+        };
+
+        // --- State Management ---
+        let state = {
+            profile: JSON.parse(localStorage.getItem('ai_health_v4_prof')) || { 
+                name: 'ゲスト', height: 170, routineEx: '', routineMeal: '',
+                checkup: { params: {}, findings: [] } 
+            },
+            dailyData: JSON.parse(localStorage.getItem('ai_health_v4_data')) || {},
+            recipes: JSON.parse(localStorage.getItem('ai_health_v4_recipes')) || [],
+            currentDate: new Date().toISOString().split('T')[0],
+            calendarViewDate: new Date(),
+            chart: null
+        };
+
+        window.onload = () => {
+            lucide.createIcons();
+            const datePicker = document.getElementById('active-date-picker');
+            if (datePicker) datePicker.value = state.currentDate;
+            
+            loadProfileUI();
+            initCurrentDay(state.currentDate);
+            initChart();
+            updateHistoryUI();
+            updateRecipeUI();
+            renderScanResults();
+        };
+
+        // --- Scanner Logic ---
+        function analyzeCheckupText() {
+            const text = document.getElementById('checkup-text-input').value;
+            if (!text) return;
+
+            const results = { params: {}, findings: [] };
+            
+            // 1. Numerical Analysis (Refined Regex)
+            const getVal = (reg) => { const m = text.match(reg); return m ? parseFloat(m[1]) : null; };
+            results.params = {
+                weight: getVal(/(?:体重|BW)\s*[:：]?\s*(\d+(?:\.\d+)?)/i),
+                bpHigh: getVal(/(?:最高血圧|収縮期|SBP)\s*[:：]?\s*(\d+)/i) || getVal(/(\d+)\/\d+/),
+                bpLow: getVal(/(?:最低血圧|拡張期|DBP)\s*[:：]?\s*(\d+)/i) || getVal(/\d+\/(\d+)/),
+                ast: getVal(/(?:AST|GOT)\s*[:：]?\s*(\d+)/i),
+                alt: getVal(/(?:ALT|GPT)\s*[:：]?\s*(\d+)/i),
+                gtp: getVal(/(?:γ-GTP|GTP)\s*[:：]?\s*(\d+)/i),
+                ldl: getVal(/(?:LDL|悪玉)\s*[:：]?\s*(\d+)/i),
+                hba1c: getVal(/(?:HbA1c)\s*[:：]?\s*(\d+(?:\.\d+)?)/i)
+            };
+
+            // 2. Keyword/Sentiment Analysis (Foundings)
+            MED_REF.keywords.forEach(k => {
+                if (k.words.some(w => text.includes(w))) {
+                    results.findings.push(k);
+                }
+            });
+
+            // Merge & Save
+            Object.keys(results.params).forEach(p => {
+                if (results.params[p] !== null) state.profile.checkup.params[p] = results.params[p];
+            });
+            state.profile.checkup.findings = results.findings;
+
+            saveSettings(false);
+            renderScanResults();
+            showMessage('診断書をインテリジェント・スキャンしました');
+            switchTab('analysis');
+        }
+
+        function renderScanResults() {
+            const grid = document.getElementById('param-grid');
+            const summary = document.getElementById('checkup-summary-details');
+            if (!grid || !summary) return;
+
+            const check = state.profile.checkup;
+            if (Object.keys(check.params).length === 0 && check.findings.length === 0) return;
+            
+            summary.classList.remove('hidden');
+            grid.innerHTML = '';
+
+            Object.entries(check.params).forEach(([key, val]) => {
+                const std = MED_REF.standards[key];
+                let status = "NORMAL";
+                let col = "text-emerald-500";
+                
+                if (std) {
+                    if (val >= std.danger) { status = "HIGH"; col = "text-red-500"; }
+                    else if (val >= std.normal) { status = "BORDER"; col = "text-amber-500"; }
+                }
+
+                grid.innerHTML += `
+                    <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                        <p class="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">${key}</p>
+                        <p class="text-lg font-black text-slate-800">${val}</p>
+                        <p class="text-[9px] font-black ${col}">${status}</p>
+                    </div>
+                `;
+            });
+            updateProfileHeader();
+        }
+
+        // --- Core Functions ---
+        function handleDateChange(d) {
+            state.currentDate = d;
+            initCurrentDay(d);
+            showMessage(`${d}にフォーカス`);
+        }
+
+        function initCurrentDay(d) {
+            if (!state.dailyData[d]) {
+                state.dailyData[d] = {
+                    water: 0, weight: '', bpH: '', bpL: '', morning: '', lunch: '', dinner: '', snack: state.profile.routineMeal || '',
+                    wake: '', sleep: '', exercise: state.profile.routineEx || '', stool: '', isAuto: true
+                };
+            }
+            loadDailyDataUI(d);
+        }
+
+        function saveDailyData() {
+            const d = state.dailyData[state.currentDate];
+            d.water = parseInt(document.getElementById('input-water').value) || 0;
+            d.weight = document.getElementById('input-weight').value;
+            d.bpH = document.getElementById('input-bp-high').value;
+            d.bpL = document.getElementById('input-bp-low').value;
+            d.morning = document.getElementById('meal-morning').value;
+            d.lunch = document.getElementById('meal-lunch').value;
+            d.dinner = document.getElementById('meal-dinner').value;
+            d.snack = document.getElementById('meal-snack').value;
+            d.wake = document.getElementById('input-wake').value;
+            d.sleep = document.getElementById('input-sleep').value;
+            d.exercise = document.getElementById('input-exercise').value;
+            d.stool = document.getElementById('input-stool').value;
+            d.isAuto = false;
+
+            localStorage.setItem('ai_health_v4_data', JSON.stringify(state.dailyData));
+            updateProfileHeader();
+            showMessage('データを暗号化（擬似）保存しました');
+        }
+
+        function loadDailyDataUI(d) {
+            const data = state.dailyData[d];
+            if (!data) return;
+
+            const elements = {
+                'input-water': data.water || 0,
+                'input-weight': data.weight || '',
+                'input-bp-high': data.bpH || '',
+                'input-bp-low': data.bpL || '',
+                'meal-morning': data.morning || '',
+                'meal-lunch': data.lunch || '',
+                'meal-dinner': data.dinner || '',
+                'meal-snack': data.snack || '',
+                'input-wake': data.wake || '',
+                'input-sleep': data.sleep || '',
+                'input-exercise': data.exercise || '',
+                'input-stool': data.stool || ''
+            };
+
+            for (const [id, value] of Object.entries(elements)) {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.value = value;
+                }
+            }
+
+            updateWaterLabel(data.water || 0);
+            updateProfileHeader();
+        }
+
+        // --- AI Insight Engine ---
+        function runAnalysis() {
+            const data = state.dailyData[state.currentDate];
+            if (!data) return;
+
+            const check = state.profile.checkup;
+            const meals = (data.morning + "," + data.lunch + "," + data.dinner + "," + data.snack).toLowerCase();
+            
+            // 1. Nutrient Scoring
+            let scores = { p: 0, c: 0, f: 0, v: 0, fi: 0, s: 0 };
+            let mealCount = 0;
+            Object.keys(FOOD_KNOWLEDGE).forEach(k => {
+                if (meals.includes(k)) {
+                    const n = FOOD_KNOWLEDGE[k];
+                    scores.p += n.p; scores.c += n.c; scores.f += n.f; scores.v += n.v; scores.fi += n.fi; scores.s += n.s;
+                    mealCount++;
+                }
+            });
+            const div = mealCount > 0 ? Math.min(mealCount, 3) : 1;
+            const finalScores = [scores.p/div, scores.c/div, scores.f/div, scores.v/div, scores.fi/div].map(v => Math.min(v, 10));
+            
+            if (state.chart) {
+                state.chart.data.datasets[0].data = finalScores;
+                state.chart.update();
+            }
+
+            // 2. Risk & Insight Building
+            let reportHtml = "";
+            let riskHtml = "";
+            let suggestions = ["ほうれん草", "サバ", "納豆"];
+
+            // Weight & BMI
+            if (data.weight && state.profile.height) {
+                const bmi = (data.weight / Math.pow(state.profile.height/100, 2)).toFixed(1);
+                const isHeavy = bmi >= 25;
+                riskHtml += createRiskItem("BMI", bmi, isHeavy ? '要警戒' : '正常', isHeavy ? 'risk-high' : 'risk-low');
+                if (isHeavy) reportHtml += `<div class='bg-white/5 p-4 rounded-2xl'><p class='font-bold text-white mb-1 tracking-tight'>📊 肥満判定 (根拠: BMI ${bmi})</p><p class='text-xs opacity-70'>${MED_REF.standards.bmi.source}の基準値(25)を超えています。脂質および糖質代謝への負荷が高まっている状態です。</p></div>`;
+            }
+
+            // High Blood Pressure (Current or Past)
+            const curBPH = parseInt(data.bpH) || check.params.bpHigh;
+            if (curBPH) {
+                const isDanger = curBPH >= MED_REF.standards.bpHigh.danger;
+                riskHtml += createRiskItem("血圧", curBPH, isDanger ? '高値' : '正常', isDanger ? 'risk-high' : 'risk-low');
+                if (isDanger) {
+                    reportHtml += `<div class='bg-white/5 p-4 rounded-2xl'><p class='font-bold text-white mb-1 tracking-tight'>❤️ 血圧リスク (根拠: ${curBPH}mmHg)</p><p class='text-xs opacity-70'>${MED_REF.standards.bpHigh.source}の家庭血圧基準を超過しています。今日の食事推定塩分量は高めです。減塩が必要です。</p></div>`;
+                    suggestions.push("アボカド", "バナナ");
+                }
+            }
+
+            // Detected Findings (Qualitative)
+            const findingsGrid = document.getElementById('findings-grid');
+            const findingsSection = document.getElementById('findings-section');
+            if (check.findings && check.findings.length > 0) {
+                if (findingsSection) findingsSection.classList.remove('hidden');
+                if (findingsGrid) {
+                    findingsGrid.innerHTML = '';
+                    check.findings.forEach(f => {
+                        findingsGrid.innerHTML += `
+                            <div class="p-4 rounded-2xl border border-slate-100 bg-slate-50 flex items-start gap-3">
+                                <div class="mt-1 w-2 h-2 rounded-full ${f.severity === 'high' ? 'bg-red-500' : 'bg-amber-500'}"></div>
+                                <div>
+                                    <p class="text-sm font-bold text-slate-800">${f.words[0]}</p>
+                                    <p class="text-[10px] text-slate-500 mt-1">${f.basis}</p>
+                                    <p class="text-[10px] text-blue-600 font-bold mt-2">AI助言: ${f.advice}</p>
+                                </div>
+                            </div>
+                        `;
+                        reportHtml += `<div class='bg-white/5 p-4 rounded-2xl'><p class='font-bold text-white mb-1 tracking-tight'>🔍 所見検出: ${f.words[0]}</p><p class='text-xs opacity-70'>${f.advice} 根拠: ${f.basis}</p></div>`;
+                    });
+                }
+            } else if (findingsSection) {
+                findingsSection.classList.add('hidden');
+            }
+
+            // Defaults
+            if (!reportHtml) reportHtml = "<p class='text-center opacity-50 py-8 italic'>重大なリスクは検出されませんでした。</p>";
+            
+            const reportEl = document.getElementById('ai-report-content');
+            if (reportEl) reportEl.innerHTML = reportHtml;
+            
+            const riskEl = document.getElementById('health-risk-list');
+            if (riskEl) riskEl.innerHTML = riskHtml || "<p class='text-xs opacity-40 italic'>No data available</p>";
+            
+            // Render Suggestions
+            const suggestContainer = document.getElementById('suggested-foods');
+            if (suggestContainer) {
+                suggestContainer.innerHTML = [...new Set(suggestions)].map(s => `<span class="px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] rounded-full font-bold border border-indigo-100">${s}</span>`).join('');
+            }
+        }
+
+        function createRiskItem(label, val, status, css) {
+            return `
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-tighter">${label}</span>
+                    <div class="text-right">
+                        <span class="font-black text-slate-800">${val}</span>
+                        <span class="risk-pill ${css} ml-2">${status}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- Helper UIs ---
+        function switchTab(id) {
+            ['input', 'analysis', 'history', 'recipes', 'settings'].forEach(t => {
+                const view = document.getElementById(`view-${t}`);
+                const tab = document.getElementById(`tab-${t}`);
+                if (view) view.classList.add('hidden');
+                if (tab) {
+                    tab.classList.remove('tab-active');
+                    tab.classList.add('text-slate-400');
+                }
+            });
+            const activeView = document.getElementById(`view-${id}`);
+            const activeTab = document.getElementById(`tab-${id}`);
+            if (activeView) activeView.classList.remove('hidden');
+            if (activeTab) {
+                activeTab.classList.add('tab-active');
+                activeTab.classList.remove('text-slate-400');
+            }
+            if (id === 'analysis') runAnalysis();
+            if (id === 'history') updateHistoryUI();
+        }
+
+        function initChart() {
+            const el = document.getElementById('nutrientChart');
+            if (!el) return;
+            const ctx = el.getContext('2d');
+            state.chart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['P (Protein)', 'C (Carb)', 'F (Fat)', 'V (Vitamin)', 'Fi (Fiber)'],
+                    datasets: [{
+                        label: '今日',
+                        data: [0,0,0,0,0],
+                        backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                        borderColor: '#3b82f6',
+                        pointBackgroundColor: '#3b82f6',
+                        borderWidth: 2,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    scales: { r: { min: 0, max: 10, ticks: { display: false }, grid: { color: '#f1f5f9' }, angleLines: { color: '#f1f5f9' } } },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function saveSettings(showMsg = true) {
+            state.profile.name = document.getElementById('setting-name').value;
+            state.profile.height = document.getElementById('setting-height').value;
+            localStorage.setItem('ai_health_v4_prof', JSON.stringify(state.profile));
+            if(showMsg) showMessage('設定を更新しました');
+            updateProfileHeader();
+        }
+
+        function loadProfileUI() {
+            const nameEl = document.getElementById('setting-name');
+            const heightEl = document.getElementById('setting-height');
+            if (nameEl) nameEl.value = state.profile.name || '';
+            if (heightEl) heightEl.value = state.profile.height || '';
+            updateProfileHeader();
+        }
+
+        function updateProfileHeader() {
+            const nameHeader = document.getElementById('header-user-name');
+            if (nameHeader) nameHeader.textContent = state.profile.name;
+            
+            const w = state.dailyData[state.currentDate]?.weight;
+            if (w && state.profile.height) {
+                const bmi = (w / Math.pow(state.profile.height/100, 2)).toFixed(1);
+                const bmiHeader = document.getElementById('header-bmi');
+                if (bmiHeader) bmiHeader.textContent = `BMI: ${bmi}`;
+                
+                const indicator = document.getElementById('health-indicator');
+                if (indicator) {
+                    indicator.className = `absolute -bottom-1 -right-1 w-4 h-4 border-2 border-white rounded-full ${bmi >= 25 ? 'bg-red-500' : 'bg-emerald-500'}`;
+                }
+            }
+            
+            const check = state.profile.checkup;
+            const statusLabel = document.getElementById('header-scan-status');
+            if (statusLabel) {
+                if (check && check.findings && check.findings.length > 0) {
+                    statusLabel.textContent = "所見あり";
+                    statusLabel.className = "text-[10px] font-bold px-2 py-0.5 bg-red-50 rounded text-red-600 tracking-wider";
+                } else if (check && check.params && Object.keys(check.params).length > 0) {
+                    statusLabel.textContent = "解析済み";
+                    statusLabel.className = "text-[10px] font-bold px-2 py-0.5 bg-blue-50 rounded text-blue-600 tracking-wider";
+                }
+            }
+        }
+
+        function showMessage(t) {
+            const b = document.getElementById('msg-box');
+            if (!b) return;
+            b.textContent = t;
+            b.classList.remove('hidden');
+            setTimeout(() => b.classList.add('hidden'), 3000);
+        }
+
+        // --- History & Recipes (Standard implementation) ---
+        function updateHistoryUI() {
+            const grid = document.getElementById('calendar-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            
+            const y = state.calendarViewDate.getFullYear(), m = state.calendarViewDate.getMonth();
+            const title = document.getElementById('calendar-title');
+            if (title) title.textContent = `${y}.${String(m + 1).padStart(2,'0')}`;
+            
+            const start = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate();
+            for(let i=0; i<start; i++) grid.innerHTML += '<div></div>';
+            for(let d=1; d<=days; d++) {
+                const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const hasData = state.dailyData[ds] && !state.dailyData[ds].isAuto;
+                const active = ds === state.currentDate;
+                const el = document.createElement('button');
+                el.onclick = () => {
+                    handleDateChange(ds);
+                    const dp = document.getElementById('active-date-picker');
+                    if (dp) dp.value = ds;
+                    switchTab('input');
+                };
+                el.className = `calendar-day border rounded-2xl p-1 text-left flex flex-col justify-between hover:bg-white transition-all ${active ? 'today shadow-md' : 'border-slate-100'}`;
+                el.innerHTML = `<span class="text-[10px] font-black ${active ? 'text-blue-600' : 'text-slate-300'}">${d}</span>${hasData ? '<div class="w-2 h-2 bg-blue-500 rounded-full mx-auto mb-1 shadow-sm"></div>' : ''}`;
+                grid.appendChild(el);
+            }
+        }
+        function prevMonth() { state.calendarViewDate.setMonth(state.calendarViewDate.getMonth()-1); updateHistoryUI(); }
+        function nextMonth() { state.calendarViewDate.setMonth(state.calendarViewDate.getMonth()+1); updateHistoryUI(); }
+        
+        function searchHistory(q) {
+            const r = document.getElementById('search-results');
+            if (!r) return;
+            r.innerHTML = '';
+            if(!q) return;
+            
+            Object.entries(state.dailyData).forEach(([d, v]) => {
+                const text = ((v.morning||"")+(v.lunch||"")+(v.dinner||"")+(v.snack||"")+(v.exercise||"")+(v.stool||"")).toLowerCase();
+                if(text.includes(q.toLowerCase())) {
+                    const i = document.createElement('div');
+                    i.className = "p-4 bg-white border border-slate-100 rounded-2xl text-xs flex justify-between cursor-pointer hover:shadow-md transition-shadow";
+                    i.onclick = () => { handleDateChange(d); switchTab('input'); };
+                    i.innerHTML = `<div><p class="font-black text-slate-800">${d}</p><p class="text-slate-400 mt-1 truncate max-w-[120px]">${v.morning || '詳細あり'}</p></div><i data-lucide="chevron-right" class="w-4 h-4 text-slate-300"></i>`;
+                    r.appendChild(i);
+                    lucide.createIcons();
+                }
+            });
+        }
+        
+        function updateRecipeUI() {
+            const list = document.getElementById('recipe-list');
+            if (!list) return;
+            list.innerHTML = state.recipes.map(r => `
+                <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm relative group">
+                    <p class="font-bold text-slate-800">${r.name}</p><p class="text-[10px] text-slate-400 mt-2">${r.items}</p>
+                    <button onclick="deleteRecipe(${r.id})" class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+        function saveRecipe() {
+            const n = document.getElementById('recipe-name').value, i = document.getElementById('recipe-items').value;
+            if(!n || !i) return; state.recipes.push({ id: Date.now(), name: n, items: i });
+            localStorage.setItem('ai_health_v4_recipes', JSON.stringify(state.recipes));
+            updateRecipeUI(); document.getElementById('recipe-name').value = ''; document.getElementById('recipe-items').value = '';
+            showMessage('レシピをマイコレクションに追加しました');
+        }
+        function deleteRecipe(id) {
+            state.recipes = state.recipes.filter(r => r.id !== id);
+            localStorage.setItem('ai_health_v4_recipes', JSON.stringify(state.recipes));
+            updateRecipeUI();
+        }
+        function openRecipePicker() {
+            const l = document.getElementById('picker-list');
+            if (!l) return;
+            l.innerHTML = state.recipes.map(r => `
+                <button onclick="appendRecipe('${r.items}')" class="w-full text-left p-5 bg-slate-50 border border-slate-100 rounded-3xl hover:bg-blue-50 hover:border-blue-200 transition-all">
+                    <p class="font-bold text-slate-800 text-sm">${r.name}</p><p class="text-[10px] text-slate-400 mt-2">${r.items}</p>
+                </button>
+            `).join('') || '<p class="text-xs text-center py-10 text-slate-400 font-bold uppercase tracking-widest">No recipes found</p>';
+            const modal = document.getElementById('recipe-picker-modal');
+            if (modal) modal.classList.replace('hidden', 'flex');
+        }
+        function closeRecipePicker() {
+            const modal = document.getElementById('recipe-picker-modal');
+            if (modal) modal.classList.replace('flex', 'hidden');
+        }
+        function appendRecipe(it) {
+            const el = document.getElementById('meal-dinner');
+            if (!el) return;
+            const c = el.value;
+            el.value = c ? c + ", " + it : it;
+            closeRecipePicker();
+            showMessage('夕食に追加しました');
+        }
+        function updateWaterLabel(v) {
+            const el = document.getElementById('water-val');
+            if (el) el.innerHTML = `${v} <span class="text-xs text-slate-400 font-normal">ml</span>`;
+        }
+    </script>
+</body>
+</html>
